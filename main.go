@@ -3,15 +3,16 @@ package main
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net"
 	"os"
 	"os/exec"
 	"sync"
-	"time"
 
 	"github.com/yomorun/yomo"
+	"github.com/yomorun/yomo/core/ylog"
 	"github.com/yomorun/yomo/serverless"
 )
 
@@ -24,6 +25,7 @@ func serveSFN(name, zipperAddr, credential, tool string, tags []uint32, conn io.
 	sfn := yomo.NewStreamFunction(
 		name,
 		zipperAddr,
+		yomo.WithSfnLogger(ylog.NewFromConfig(ylog.Config{Level: "error"})),
 		yomo.WithSfnReConnect(),
 		yomo.WithSfnCredential(credential),
 		yomo.WithSfnAIFunctionDefinitionInJsonSchema(tool),
@@ -105,8 +107,14 @@ func Start(zipperAddr, credential string, cmd *exec.Cmd) error {
 		return err
 	}
 
+	fd := &FunctionDefinition{}
+	err = json.Unmarshal([]byte(header.FunctionDefinition), fd)
+	if err != nil || fd.Name == "" {
+		return errors.New("invalid jsonschema, please check your jsonschema file")
+	}
+
 	go func() {
-		if err := serveSFN("TODO:", zipperAddr, credential, header.FunctionDefinition, header.Tags, conn); err != nil {
+		if err := serveSFN(fd.Name, zipperAddr, credential, header.FunctionDefinition, header.Tags, conn); err != nil {
 			errch <- err
 		}
 	}()
@@ -115,21 +123,24 @@ func Start(zipperAddr, credential string, cmd *exec.Cmd) error {
 }
 
 func main() {
-	go func() {
-		source := yomo.NewSource("hello-1", "localhost:9000")
-		err := source.Connect()
-		if err != nil {
-			log.Fatalln(err)
-		}
+	// go func() {
+	// 	source := yomo.NewSource("hello-1", "localhost:9000")
+	// 	err := source.Connect()
+	// 	if err != nil {
+	// 		log.Fatalln(err)
+	// 	}
 
-		for {
-			source.Write(0xe001, []byte(`{"trans_id":"12345","req_id":"67890","result":"Success","arguments":"{}","tool_call_id":"tool123","function_name":"exampleFunction","is_ok":true}`))
-			time.Sleep(time.Second)
-		}
-	}()
+	// 	for {
+	// 		source.Write(0xe001, []byte(`{"trans_id":"12345","req_id":"67890","result":"Success","arguments":"{}","tool_call_id":"tool123","function_name":"exampleFunction","is_ok":true}`))
+	// 		time.Sleep(time.Second)
+	// 	}
+	// }()
 
 	cmd := exec.Command("npm", "run", "sfn")
-	cmd.Dir = "./"
+	cmd.Dir = "./nodejs"
+
+	// cmd := exec.Command("python", "example/example.py")
+	// cmd.Dir = "./python"
 
 	if err := Start("localhost:9000", "", cmd); err != nil {
 		log.Fatalln(err)
@@ -186,4 +197,8 @@ func readHeader(conn io.Reader) ([]byte, error) {
 	}
 
 	return title, nil
+}
+
+type FunctionDefinition struct {
+	Name string `json:"name,omitempty"`
 }

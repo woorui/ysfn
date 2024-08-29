@@ -1,5 +1,6 @@
 import net from "net";
 import { Writable } from "stream";
+import { json } from "stream/consumers";
 
 export class Context {
 	public tag: number;
@@ -60,9 +61,11 @@ export function serve(
 	handler: (ctx: Context) => Promise<void>,
 	jsonschema: Object,
 ) {
+	const functionDefinition = JSON.stringify(jsonschema);
+
 	const title = JSON.stringify({
 		tags: tags,
-		function_definition: jsonschema,
+		function_definition: functionDefinition,
 	});
 
 	const conn = net.createConnection(SOCK_PATH);
