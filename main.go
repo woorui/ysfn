@@ -28,7 +28,7 @@ func serveSFN(name, zipperAddr, credential, tool string, tags []uint32, conn io.
 		yomo.WithSfnLogger(ylog.NewFromConfig(ylog.Config{Level: "error"})),
 		yomo.WithSfnReConnect(),
 		yomo.WithSfnCredential(credential),
-		yomo.WithSfnAIFunctionDefinitionInJsonSchema(tool),
+		yomo.WithSfnAIFunctionDefinitionInJsonSchema(tool), // yomo should be able to accept jsonschema file
 	)
 
 	var once sync.Once
