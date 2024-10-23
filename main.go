@@ -4,31 +4,33 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 
+	"github.com/joho/godotenv"
 	"github.com/yomorun/yomo"
 	"github.com/yomorun/yomo/core/ylog"
 	"github.com/yomorun/yomo/serverless"
 )
 
 type Header struct {
-	Tags               []uint32 `json:"tags"`
-	FunctionDefinition string   `json:"function_definition"`
+	Tags []uint32 `json:"tags"`
 }
 
-func serveSFN(name, zipperAddr, credential, tool string, tags []uint32, conn io.ReadWriter) error {
+func serveSFN(name, zipperAddr, credential, functionDefinition string, tags []uint32, conn io.ReadWriter) error {
 	sfn := yomo.NewStreamFunction(
 		name,
 		zipperAddr,
 		yomo.WithSfnLogger(ylog.NewFromConfig(ylog.Config{Level: "error"})),
 		yomo.WithSfnReConnect(),
 		yomo.WithSfnCredential(credential),
-		yomo.WithSfnAIFunctionDefinitionInJsonSchema(tool), // yomo should be able to accept jsonschema file
+		yomo.WithAIFunctionJsonDefinition(functionDefinition),
 	)
 
 	var once sync.Once
@@ -65,11 +67,14 @@ func serveSFN(name, zipperAddr, credential, tool string, tags []uint32, conn io.
 	return nil
 }
 
-func Start(zipperAddr, credential string, cmd *exec.Cmd) error {
-	socketPath := "sfn.sock"
-	defer os.Remove(socketPath)
+func Run(name, zipperAddr, credential string, wrapper SfnWrapper) error {
+	if err := wrapper.Build(); err != nil {
+		return err
+	}
 
-	addr, err := net.ResolveUnixAddr("unix", socketPath)
+	sockPath := wrapper.WorkDir() + "/sfn.sock"
+
+	addr, err := net.ResolveUnixAddr("unix", sockPath)
 	if err != nil {
 		return err
 	}
@@ -82,11 +87,8 @@ func Start(zipperAddr, credential string, cmd *exec.Cmd) error {
 
 	errch := make(chan error)
 
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	go func() {
-		if err := cmd.Run(); err != nil {
+		if err := wrapper.Run(); err != nil {
 			errch <- err
 		}
 	}()
@@ -107,14 +109,19 @@ func Start(zipperAddr, credential string, cmd *exec.Cmd) error {
 		return err
 	}
 
+	fdString, err := wrapper.GetFunctionDefinition()
+	if err != nil {
+		return fmt.Errorf("cannot load function definition: %w", err)
+	}
+
 	fd := &FunctionDefinition{}
-	err = json.Unmarshal([]byte(header.FunctionDefinition), fd)
+	err = json.Unmarshal([]byte(fdString), fd)
 	if err != nil || fd.Name == "" {
 		return errors.New("invalid jsonschema, please check your jsonschema file")
 	}
 
 	go func() {
-		if err := serveSFN(fd.Name, zipperAddr, credential, header.FunctionDefinition, header.Tags, conn); err != nil {
+		if err := serveSFN(name, zipperAddr, credential, fdString, header.Tags, conn); err != nil {
 			errch <- err
 		}
 	}()
@@ -123,26 +130,24 @@ func Start(zipperAddr, credential string, cmd *exec.Cmd) error {
 }
 
 func main() {
-	// go func() {
-	// 	source := yomo.NewSource("hello-1", "localhost:9000")
-	// 	err := source.Connect()
-	// 	if err != nil {
-	// 		log.Fatalln(err)
-	// 	}
+	if len(os.Args) < 2 {
+		log.Fatalln("usage: yomorun <entry file>")
+	}
+	entryFile := os.Args[1]
 
-	// 	for {
-	// 		source.Write(0xe001, []byte(`{"trans_id":"12345","req_id":"67890","result":"Success","arguments":"{}","tool_call_id":"tool123","function_name":"exampleFunction","is_ok":true}`))
-	// 		time.Sleep(time.Second)
-	// 	}
-	// }()
+	wrapper, err := NewNodejsWrapper(entryFile)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-	cmd := exec.Command("npm", "run", "sfn")
-	cmd.Dir = "./nodejs"
+	_ = godotenv.Load()
 
-	// cmd := exec.Command("python", "example/example.py")
-	// cmd.Dir = "./python"
-
-	if err := Start("localhost:9000", "", cmd); err != nil {
+	if err := Run(
+		os.Getenv("YOMO_SFN_NAME"),
+		os.Getenv("YOMO_SFN_ZIPPER"),
+		os.Getenv("YOMO_SFN_CREDENTIAL"),
+		wrapper,
+	); err != nil {
 		log.Fatalln(err)
 	}
 }
@@ -201,4 +206,65 @@ func readHeader(conn io.Reader) ([]byte, error) {
 
 type FunctionDefinition struct {
 	Name string `json:"name,omitempty"`
+}
+
+type SfnWrapper interface {
+	WorkDir() string
+	Build() error
+	GetFunctionDefinition() (string, error)
+	Run() error
+}
+
+type NodejsWrapper struct {
+	workDir     string
+	entryTSFile string
+	entryJSFile string
+}
+
+func NewNodejsWrapper(entryTSFile string) (SfnWrapper, error) {
+	ext := filepath.Ext(entryTSFile)
+	if ext != ".ts" {
+		return nil, fmt.Errorf("only support typescript, got: %s", entryTSFile)
+	}
+	workdir := filepath.Dir(entryTSFile)
+
+	entryJSFile := entryTSFile[:len(entryTSFile)-len(ext)] + ".js"
+
+	w := &NodejsWrapper{
+		workDir:     workdir,
+		entryTSFile: entryTSFile,
+		entryJSFile: entryJSFile,
+	}
+
+	return w, nil
+}
+
+func (w *NodejsWrapper) WorkDir() string {
+	return w.workDir
+}
+
+func (w *NodejsWrapper) Build() error {
+	cmd := exec.Command("npm", "install")
+	cmd.Dir = w.workDir
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	cmd2 := exec.Command("tsc", w.entryTSFile)
+	cmd2.Dir = w.workDir
+
+	return cmd2.Run()
+}
+
+func (w *NodejsWrapper) GetFunctionDefinition() (string, error) {
+	data, err := os.ReadFile(filepath.Join(w.workDir, "jsonschema.json"))
+	return string(data), err
+}
+
+func (w *NodejsWrapper) Run() error {
+	cmd := exec.Command("node", w.entryJSFile)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

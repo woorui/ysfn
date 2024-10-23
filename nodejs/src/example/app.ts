@@ -1,5 +1,4 @@
 import { Context, serve } from "../lib";
-import * as jsonschema from "./jsonschema.json"
 
 type Args = {
     order_id: string
@@ -40,4 +39,4 @@ async function handle(ctx: Context) {
     ctx.writeLLMResult(`{"order_id": "${args.order_id}", "delivery_date": "2024-08-30"}`);
 }
 
-serve([0x33], handle, jsonschema);
+serve([0x33], handle);

@@ -1,6 +1,5 @@
-import net from "net";
+import * as net from "net";
 import { Writable } from "stream";
-import { json } from "stream/consumers";
 
 export class Context {
 	public tag: number;
@@ -59,18 +58,16 @@ export class Context {
 export function serve(
 	tags: number[],
 	handler: (ctx: Context) => Promise<void>,
-	jsonschema: Object,
 ) {
-	const functionDefinition = JSON.stringify(jsonschema);
-
 	const title = JSON.stringify({
 		tags: tags,
-		function_definition: functionDefinition,
 	});
 
 	const conn = net.createConnection(SOCK_PATH);
 
 	conn.on("connect", () => {
+		console.log("connected");
+
 		writeHeader(conn, title);
 
 		conn.on("data", async (buf) => {
@@ -115,7 +112,7 @@ function writeTagData(conn: Writable, tag: number, data: string) {
 }
 
 const REDUCE_TAG = 0xe001;
-const SOCK_PATH = "/Users/wurui/workspace/woorui/ysfn/sfn.sock";
+const SOCK_PATH = "sfn.sock";
 
 type FunctionCall = {
 	trans_id: string;
