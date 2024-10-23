@@ -2,7 +2,10 @@ module github.com/woorui/ysfn
 
 go 1.21
 
-require github.com/yomorun/yomo v1.18.14
+require (
+	github.com/joho/godotenv v1.5.1
+	github.com/yomorun/yomo v1.18.14
+)
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
@@ -19,7 +22,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/invopop/jsonschema v0.12.0 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/lmittmann/tint v1.0.4 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matoous/go-nanoid/v2 v2.1.0 // indirect
