@@ -1,6 +1,7 @@
 package wrapper
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -152,17 +153,23 @@ func ReadTagData(r io.Reader) (uint32, []byte, error) {
 }
 
 func WriteTagData(w io.Writer, tag uint32, data []byte) error {
-	err := binary.Write(w, binary.LittleEndian, tag)
+	buf := bytes.NewBuffer(nil)
+	err := binary.Write(buf, binary.LittleEndian, tag)
 	if err != nil {
 		return err
 	}
 
-	err = binary.Write(w, binary.LittleEndian, uint32(len(data)))
+	err = binary.Write(buf, binary.LittleEndian, uint32(len(data)))
 	if err != nil {
 		return err
 	}
 
-	_, err = w.Write(data)
+	_, err = buf.Write(data)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(buf.Bytes())
 	if err != nil {
 		return err
 	}
