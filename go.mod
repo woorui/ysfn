@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/joho/godotenv v1.5.1
-	github.com/yomorun/yomo v1.18.14
+	github.com/yomorun/yomo v1.18.16
 )
 
 require (
