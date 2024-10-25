@@ -19,7 +19,7 @@ YOMO_SFN_ZIPPER=zipper.vivgrid.com:9000
 YOMO_SFN_CREDENTIAL=
 ```
 
-4. Run with the cli program
+4. Run example with the cli program
 ```bash
 cd example
 pnpm link --global @yomo/sfn

@@ -79,7 +79,7 @@ func main() {
 					panic(err)
 				}
 
-				fmt.Println(tag, string(data))
+				fmt.Println("Receive:", tag, string(data))
 			}
 		}()
 	}
