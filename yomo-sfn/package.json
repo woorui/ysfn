@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "description": "yomo sfn",
   "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
   "scripts": {
     "link": "pnpm install && pnpm run build && pnpm link --global",
-    "build": "tsc -p ./tsconfig.json --outDir ./lib"
+    "build": "tsc -p ./tsconfig.json"
   },
   "keywords": [],
   "author": "",
