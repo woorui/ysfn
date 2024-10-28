@@ -1,6 +1,7 @@
 package nodejs
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"os"
@@ -26,9 +27,28 @@ type NodejsWrapper struct {
 	entryTSFile  string // eg. src/app.ts
 	entryJSFile  string // eg. src/app.js
 	fileName     string // eg. src/app
+
+	// command path
+	nodePath string
+	pnpmPath string
+	tscPath  string
 }
 
 func NewWrapper(functionName, entryTSFile string) (wrapper.SFNWrapper, error) {
+	// check command
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		return nil, errors.New("[node] command was not found. to run the sfn in ts, you need to install node. For details, visit https://nodejs.org")
+	}
+	pnpmPath, err := exec.LookPath("pnpm")
+	if err != nil {
+		return nil, errors.New("[pnpm] command was not found. to build the sfn in ts, you need to install pnpm. For details, visit https://pnpm.io")
+	}
+	tscPath, err := exec.LookPath("tsc")
+	if err != nil {
+		return nil, errors.New("[tsc] command was not found. to build the sfn in ts, you need to install typescript. For details, visit https://www.typescriptlang.org")
+	}
+
 	ext := filepath.Ext(entryTSFile)
 	if ext != ".ts" {
 		return nil, fmt.Errorf("only support typescript, got: %s", entryTSFile)
@@ -45,6 +65,9 @@ func NewWrapper(functionName, entryTSFile string) (wrapper.SFNWrapper, error) {
 		entryTSFile:  entryTSFile,
 		entryJSFile:  entryJSFile,
 		fileName:     fileName,
+		nodePath:     nodePath,
+		pnpmPath:     pnpmPath,
+		tscPath:      tscPath,
 	}
 
 	return w, nil
@@ -64,7 +87,7 @@ func (w *NodejsWrapper) Build() error {
 	}
 
 	// 2. install dependencies
-	cmd := exec.Command("pnpm", "install")
+	cmd := exec.Command(w.pnpmPath, "install")
 	cmd.Dir = w.workDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -73,7 +96,7 @@ func (w *NodejsWrapper) Build() error {
 	}
 
 	// 3. compile .wrapper.ts file to .wrapper.js
-	cmd2 := exec.Command("tsc", wrapperTS)
+	cmd2 := exec.Command(w.tscPath, wrapperTS)
 	cmd2.Dir = w.workDir
 	cmd2.Stdout = os.Stdout
 	cmd2.Stderr = os.Stderr
@@ -87,7 +110,7 @@ func (w *NodejsWrapper) Build() error {
 }
 
 func (w *NodejsWrapper) Run() error {
-	cmd := exec.Command("node", wrapperJS)
+	cmd := exec.Command(w.nodePath, wrapperJS)
 	cmd.Dir = w.workDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
