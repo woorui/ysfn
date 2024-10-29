@@ -57,29 +57,32 @@ func Run(name, zipperAddr, credential string, wrapper SFNWrapper) error {
 		}
 	}()
 
-	conn, err := listener.Accept()
-	if err != nil {
-		return err
-	}
-
-	headerBytes, err := ReadHeader(conn)
-	if err != nil {
-		return err
-	}
-
-	header := &Header{}
-	err = json.Unmarshal(headerBytes, header)
-	if err != nil {
-		return err
-	}
-
-	fd := &FunctionDefinition{}
-	err = json.Unmarshal([]byte(header.FunctionDefinition), fd)
-	if err != nil || fd.Name == "" {
-		return errors.New("invalid jsonschema, please check your jsonschema file")
-	}
-
 	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			errch <- err
+			return
+		}
+
+		headerBytes, err := ReadHeader(conn)
+		if err != nil {
+			errch <- err
+			return
+		}
+
+		header := &Header{}
+		err = json.Unmarshal(headerBytes, header)
+		if err != nil {
+			errch <- err
+			return
+		}
+
+		fd := &FunctionDefinition{}
+		err = json.Unmarshal([]byte(header.FunctionDefinition), fd)
+		if err != nil || fd.Name == "" {
+			errch <- errors.New("invalid jsonschema, please check your jsonschema file")
+			return
+		}
 		if err := serveSFN(name, zipperAddr, credential, header.FunctionDefinition, header.Tags, conn); err != nil {
 			errch <- err
 		}

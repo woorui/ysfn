@@ -16,10 +16,7 @@ func init() {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatalln("usage: yomorun <entry file>")
-	}
-	entryFile := os.Args[1]
+	entryFile := "app.ts"
 
 	var (
 		functionName = os.Getenv("YOMO_SFN_NAME")
