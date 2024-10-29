@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -13,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/yomorun/yomo"
-	"github.com/yomorun/yomo/core/ylog"
 	"github.com/yomorun/yomo/serverless"
 )
 
@@ -28,11 +26,15 @@ type Header struct {
 	FunctionDefinition string   `json:"function_definition"`
 }
 
-func Run(name, zipperAddr, credential string, wrapper SFNWrapper) error {
+func BuildAndRun(name, zipperAddr, credential string, wrapper SFNWrapper) error {
 	if err := wrapper.Build(); err != nil {
 		return err
 	}
 
+	return Run(name, zipperAddr, credential, wrapper)
+}
+
+func Run(name, zipperAddr, credential string, wrapper SFNWrapper) error {
 	sockPath := filepath.Join(wrapper.WorkDir(), "sfn.sock")
 	_ = os.Remove(sockPath)
 
@@ -93,7 +95,6 @@ func serveSFN(name, zipperAddr, credential, functionDefinition string, tags []ui
 		yomo.WithSfnReConnect(),
 		yomo.WithSfnCredential(credential),
 		yomo.WithAIFunctionJsonDefinition(functionDefinition),
-		yomo.WithSfnLogger(ylog.NewFromConfig(ylog.Config{Level: "error"})),
 	)
 
 	var once sync.Once
@@ -105,7 +106,6 @@ func serveSFN(name, zipperAddr, credential, functionDefinition string, tags []ui
 			data = ctx.Data()
 		)
 
-		fmt.Println("Input:", string(data))
 		WriteTagData(conn, tag, data)
 
 		once.Do(func() {
@@ -115,7 +115,6 @@ func serveSFN(name, zipperAddr, credential, functionDefinition string, tags []ui
 					if err == io.EOF {
 						return
 					}
-					fmt.Println("Output:", string(data))
 					_ = ctx.Write(tag, data)
 				}
 			}()
@@ -130,7 +129,7 @@ func serveSFN(name, zipperAddr, credential, functionDefinition string, tags []ui
 
 	sfn.Wait()
 
-	return nil
+	return errors.New("sfn exited")
 }
 
 func ReadTagData(r io.Reader) (uint32, []byte, error) {

@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 
 	_ "embed"
-
-	"github.com/woorui/ysfn/wrapper"
 )
 
 //go:embed templates/wrapper_ts.tmpl
@@ -34,7 +32,7 @@ type NodejsWrapper struct {
 	tscPath  string
 }
 
-func NewWrapper(functionName, entryTSFile string) (wrapper.SFNWrapper, error) {
+func NewWrapper(functionName, entryTSFile string) (*NodejsWrapper, error) {
 	// check command
 	nodePath, err := exec.LookPath("node")
 	if err != nil {
@@ -103,8 +101,6 @@ func (w *NodejsWrapper) Build() error {
 	if err := cmd2.Run(); err != nil {
 		return err
 	}
-
-	fmt.Println("Build (Install Dependencies & Compile) success")
 
 	return nil
 }
